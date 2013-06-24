@@ -80,7 +80,7 @@ function ready(error, topology, hospitals, drg){
 
 	colorScale.range(["#FFFF66", "#FFFF00", "#E68000", "#D94000", "#CC0000"])
 				.domain(hospitals.map( function(d){ return d.drg ? d.drg.avPayments : undefined; } ));
-	colorScale.range(['blue', 'purple', 'red']);
+	colorScale.range(['lightblue', 'blue', 'orange', 'red']);
 
 	circles = svg.append("g").selectAll("circle")
 		.data(hospitals).enter()
@@ -88,7 +88,7 @@ function ready(error, topology, hospitals, drg){
 				.attr("cx", function(d){ return proj([d.long, d.lat])[0]; })
 				.attr("cy", function(d){ return proj([d.long, d.lat])[1]; })
 				.attr("r", 	function(d){ return d.drg ? radiusScale(d.drg.dischargeNum) : 0; })
-				.attr("id", function(d){ return "id" + d.hosId; })
+				.attr("id", function(d){ return "id" + d.hosID; })
 				.style("fill", function(d){ return d.drg ? colorScale(d.drg.avPayments) : 0; })
 		.on("mouseover", function(d){
 			d3.select(this)
@@ -113,34 +113,32 @@ function ready(error, topology, hospitals, drg){
 			tooltip.transition().duration(700).style("opacity", 0);
 		});
 
-	lb = 1.370;
-	metorsCF = crossfilter(metors),
-		all = metorsCF.groupAll(),
-		year = metorsCF.dimension(function(d){return d.year;}),
-		years = year.group(function(d){return Math.floor(d/10)*10;}),
-		mass = metorsCF.dimension(function(d){return d.mass}),
-		masses = mass.group(function(d){ 
-			var rv = Math.pow(lb, Math.floor(Math.log(d)/Math.log(lb)))
-			return rv;}),
-		type = metorsCF.dimension(function(d){return d.type_of_meteorite;}),
-		types = type.group();
+	vHospitals = hospitals.filter(function(d){ return d.drg; });
+	hospitalCF = crossfilter(vHospitals),
+	all = hospitalCF.groupAll(),
 
-		cartoDbId = metorsCF.dimension(function(d){return d.id;});
-		cartoDbIds = cartoDbId.group()
+	dischargeNum = hospitalCF.dimension(function(d){ return d.drg.dischargeNum; }),
+	dischargeNums = dischargeNum.group(function(d){ return Math.floor(d/10)*10; }),
+
+	avPayment = hospitalCF.dimension(function(d){ return d.avPayments}),
+	avPayments = avPayment.group(function(d){ Math.floor(d/10)*10; }),
+
+	hosID = hospitalCF.dimension(function(d){ return d.hosID; }),
+	hosIDs = hosID.group();
 
 	var charts = [
 		barChart()
-				.dimension(year)
-				.group(years)
+				.dimension(dischargeNum)
+				.group(dischargeNums)
 			.x(d3.scale.linear()
-				.domain([1490,2020])
+				.domain([dischargeNum.bottom(1)[0].drg.dischargeNum, dischargeNum.top(1)[0].drg.dischargeNum])
 				.rangeRound([-1, 20*24-5])),
 
 		barChart()
-				.dimension(mass)
-				.group(masses)
-			.x(d3.scale.log().base([lb])
-				.domain([1,25000001])
+				.dimension(avPayment)
+				.group(avPayments)
+			.x(d3.scale.linear()
+				.domain([avPayment.bottom(1)[0].drg.avPayments, avPayment.top(1)[0].drg.avPayments])
 				.rangeRound([0,20*24]))
 	];
 
@@ -149,7 +147,7 @@ function ready(error, topology, hospitals, drg){
 			.each(function(chart){chart.on("brush", renderAll).on("brushend", renderAll)});
 
 	d3.selectAll("#total")
-			.text(metorsCF.size());
+			.text(hospitalCF.size());
 
 
 	function render(method){
@@ -158,26 +156,26 @@ function ready(error, topology, hospitals, drg){
 
 
 	lastFilterArray = [];
-	metors.forEach(function(d, i){
+	vHospitals.forEach(function(d, i){
 		lastFilterArray[i] = 1;
 	});
 
 	function renderAll(){
 		chart.each(render);
 
-		var filterArray = cartoDbIds.all();
-		filterArray.forEach(function(d, i){
-			if (d.value != lastFilterArray[i]){
-				lastFilterArray[i] = d.value;
-				d3.select("#id" + d.key).transition().duration(500)
-						.attr("r", d.value == 1 ? 2*radiusScale(metors[i].mass) : 0)
-					.transition().delay(550).duration(500)
-						.attr("r", d.value == 1 ? radiusScale(metors[i].mass) : 0);
+		// var filterArray = hosIDs.all();
+		// filterArray.forEach(function(d, i){
+		// 	if (d.value != lastFilterArray[i]){
+		// 		lastFilterArray[i] = d.value;
+		// 		d3.select("#id" + d.key).transition().duration(500)
+		// 				.attr("r", d.value == 1 ? 2*radiusScale(metors[i].mass) : 0)
+		// 			.transition().delay(550).duration(500)
+		// 				.attr("r", d.value == 1 ? radiusScale(metors[i].mass) : 0);
 
-			}
-		})
+		// 	}
+		// })
 
-		d3.select("#active").text(all.value());
+		// d3.select("#active").text(all.value());
 	}
 
 	window.reset = function(i){
