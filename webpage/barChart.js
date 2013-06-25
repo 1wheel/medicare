@@ -10,7 +10,8 @@ function barChart() {
       brushDirty,
       dimension,
       group,
-      round;
+      round,
+      barWidth;
 
   function chart(div) {
     var width = x.range()[1],
@@ -91,10 +92,7 @@ function barChart() {
           d;
       while (++i < n) {
         d = groups[i];
-        if (isNaN(x(d.key))) {
-          debugger;
-        }
-        path.push("M", x(d.key), ",", height, "V", y(d.value), "h9V", height);
+        path.push("M", x(d.key), ",", height, "V", y(d.value), "h", barWidth, "V", height);
       }
       return path.join("");
     }
@@ -199,6 +197,12 @@ function barChart() {
   chart.round = function(_) {
     if (!arguments.length) return round;
     round = _;
+    return chart;
+  };
+
+  chart.barWidth = function(_) {
+    if (!arguments.length) return barWidth;
+    barWidth = _;
     return chart;
   };
 

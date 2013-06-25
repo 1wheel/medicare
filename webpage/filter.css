@@ -104,6 +104,12 @@ div.tooltip {
   overflow: hidden;
 }
 
+.active {
+  fill: lightgrey;
+}
+
+
+
 #mass-chart{
   border-left: solid 1px #aaa;
 }
@@ -125,11 +131,11 @@ div.tooltip {
 }
 
 #year-chart .foreground.bar {
-  fill: #ff7f0e;
+  fill: steelblue;
 }
 
 #mass-chart .foreground.bar {
-  fill:  #d62728;
+  fill:  steelblue;
 }
 
 .bar{

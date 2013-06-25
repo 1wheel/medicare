@@ -1,5 +1,6 @@
 var width = 1000,
-	height = 500;
+	height = 500,
+	centered;
 
 var proj = d3.geo.albersUsa()
 		.scale(1300)
@@ -18,17 +19,49 @@ var zoom = d3.behavior.zoom()
 var svg = d3.select("#map").append("svg")
 		.attr("width", width)
 		.attr("height", height)
-		.call(zoom);
+
+var g = svg.append("g");
 
 function zoom() {
 	proj.translate(d3.event.translate).scale(d3.event.scale);
-	svg.selectAll("path").attr("d", path);
+	g.selectAll("path").attr("d", path);
 	circles
   		.attr("cx", function(d){return proj([d.long, d.lat])[0];})
 		.attr("cy", function(d){return proj([d.long, d.lat])[1];});
 }
 
-var borders = svg.append("g");
+function clicked(d) {
+
+  if (d && centered !== d) {
+    centroid = path.centroid(d);
+    x = centroid[0];
+    y = centroid[1];
+    k = 4;
+    centered = d;
+  } else {
+    x = width / 2;
+    y = height / 2;
+    k = 1;
+    centered = null;
+  }
+
+  g.selectAll("path")
+      .classed("active", centered && function(d) { return d === centered; });
+
+
+  g.transition().duration(500)
+  	.attr("transform", "translate(" + width / 2 + "," + height / 2 + ")scale(" + k + ")translate(" + -x + "," + -y + ")");
+
+  d3.selectAll(".border")
+    .transition().duration(500).style("stroke-width", .25 / k + "px");
+
+  g.selectAll("path")
+    .classed("active", centered && function(d) { return d === centered; });
+
+}
+
+
+var stateNameToAbv = {"Alabama":"AL","Alaska":"AK","American Samoa":"AS","Arizona":"AZ","Arkansas":"AR","California":"CA","Colorado":"CO","Connecticut":"CT","Delaware":"DE","District Of Columbia":"DC","Federated States Of Micronesia":"FM","Florida":"FL","Georgia":"GA","Guam":"GU","Hawaii":"HI","Idaho":"ID","Illinois":"IL","Indiana":"IN","Iowa":"IA","Kansas":"KS","Kentucky":"KY","Louisiana":"LA","Maine":"ME","Marshall Islands":"MH","Maryland":"MD","Massachusetts":"MA","Michigan":"MI","Minnesota":"MN","Mississippi":"MS","Missouri":"MO","Montana":"MT","Nebraska":"NE","Nevada":"NV","New Hampshire":"NH","New Jersey":"NJ","New Mexico":"NM","New York":"NY","North Carolina":"NC","North Dakota":"ND","Northern Mariana Islands":"MP","Ohio":"OH","Oklahoma":"OK","Oregon":"OR","Palau":"PW","Pennsylvania":"PA","Puerto Rico":"PR","Rhode Island":"RI","South Carolina":"SC","South Dakota":"SD","Tennessee":"TN","Texas":"TX","Utah":"UT","Vermont":"VT","Virgin Islands":"VI","Virginia":"VA","Washington":"WA","West Virginia":"WV","Wisconsin":"WI","Wyoming":"WY"}
 
 var radiusScale = d3.scale.pow().exponent(.5)
 
@@ -39,11 +72,6 @@ var tooltip = d3.select("body").append("div")
     .style("opacity", 1e-6)
     .style("background", "rgba(250,250,250,.7)");
 
-tooltip.append("img")
-	.attr("id", "tooltipImg")
-	.attr("height", 200)
-	.attr("width", 200)
-	.style("opacity", "1");
 
 queue()
 	.defer(d3.json, "us-states.json")
@@ -52,12 +80,20 @@ queue()
 	.await(ready);
 
 function ready(error, topology, hospitals, drg){
-	borders.selectAll("path")
+	stateBorders = g.selectAll("path")
 		.data(topology.features)
 	.enter()
 		.append("svg:path")
 		.attr("d", path)
 		.attr("class", "border")
+		.on("click", function(d){ 
+			var abv = stateNameToAbv[d.properties.name];
+			console.log(abv); 
+			clicked(d3.select(this).datum());
+			state.filter( (centered != null) ? abv : null );
+			setTimeout(renderAll, 500); 
+
+		});
 
 	drg.forEach(function(d){
 		d.dischargeNum 	= +d.dischargeNum;
@@ -82,7 +118,7 @@ function ready(error, topology, hospitals, drg){
 				.domain(hospitals.map( function(d){ return d.drg ? d.drg.avPayments : undefined; } ));
 	colorScale.range(['lightblue', 'blue', 'orange', 'red']);
 
-	circles = svg.append("g").selectAll("circle")
+	circles = g.selectAll("circle")
 		.data(hospitals).enter()
 			.append("circle")
 				.attr("cx", function(d){ return proj([d.long, d.lat])[0]; })
@@ -114,32 +150,47 @@ function ready(error, topology, hospitals, drg){
 		});
 
 	vHospitals = hospitals.filter(function(d){ return d.drg; });
-	hospitalCF = crossfilter(vHospitals),
-	all = hospitalCF.groupAll(),
+	hospitalCF = crossfilter(vHospitals);
+	all = hospitalCF.groupAll();
 
-	dischargeNum = hospitalCF.dimension(function(d){ return d.drg.dischargeNum; }),
-	dischargeNums = dischargeNum.group(function(d){ return Math.floor(d/10)*10; }),
+	function getDischargeNum(d)	{ return d.drg.dischargeNum; }
+	dischargeInterval = (d3.max(vHospitals, getDischargeNum) - d3.min(vHospitals, getDischargeNum))/47;
 
-	avPayment = hospitalCF.dimension(function(d){ return d.avPayments}),
-	avPayments = avPayment.group(function(d){ Math.floor(d/10)*10; }),
+	function getavPayment(d)	{ return d.drg.avPayments; }
+	paymentInterval = (d3.max(vHospitals, getavPayment) - d3.min(vHospitals, getavPayment))/47;
+
+	function toGroup(value, interval){ return Math.floor(value/interval)*interval; }
+
+	dischargeNum = hospitalCF.dimension(getDischargeNum),
+	dischargeNums = dischargeNum.group(function(d){ return toGroup(d, dischargeInterval); }),
+
+	avPayment = hospitalCF.dimension(getavPayment),
+	avPayments = avPayment.group(function(d){ return toGroup(d, paymentInterval); }),
+
+	state = hospitalCF.dimension(function(d){ return d.state; });
+	states = state.group();
 
 	hosID = hospitalCF.dimension(function(d){ return d.hosID; }),
 	hosIDs = hosID.group();
 
 	var charts = [
 		barChart()
-				.dimension(dischargeNum)
-				.group(dischargeNums)
+			.dimension(dischargeNum)
+			.group(dischargeNums)
 			.x(d3.scale.linear()
-				.domain([dischargeNum.bottom(1)[0].drg.dischargeNum, dischargeNum.top(1)[0].drg.dischargeNum])
-				.rangeRound([-1, 20*24-5])),
+				.domain([	toGroup(d3.min(vHospitals, getDischargeNum), dischargeInterval), 
+							toGroup(d3.max(vHospitals, getDischargeNum), dischargeInterval)*48/47])
+				.rangeRound([0, 20*24]))
+			.barWidth(8),
 
 		barChart()
-				.dimension(avPayment)
-				.group(avPayments)
+			.dimension(avPayment)
+			.group(avPayments)
 			.x(d3.scale.linear()
-				.domain([avPayment.bottom(1)[0].drg.avPayments, avPayment.top(1)[0].drg.avPayments])
+				.domain([	toGroup(d3.min(vHospitals, getavPayment), paymentInterval), 
+							toGroup(d3.max(vHospitals, getavPayment), paymentInterval)*48/47])
 				.rangeRound([0,20*24]))
+			.barWidth(8)
 	];
 
 	var chart = d3.selectAll(".chart")
@@ -163,17 +214,17 @@ function ready(error, topology, hospitals, drg){
 	function renderAll(){
 		chart.each(render);
 
-		// var filterArray = hosIDs.all();
-		// filterArray.forEach(function(d, i){
-		// 	if (d.value != lastFilterArray[i]){
-		// 		lastFilterArray[i] = d.value;
-		// 		d3.select("#id" + d.key).transition().duration(500)
-		// 				.attr("r", d.value == 1 ? 2*radiusScale(metors[i].mass) : 0)
-		// 			.transition().delay(550).duration(500)
-		// 				.attr("r", d.value == 1 ? radiusScale(metors[i].mass) : 0);
+		var filterArray = hosIDs.all();
+		filterArray.forEach(function(d, i){
+			if (d.value != lastFilterArray[i]){
+				lastFilterArray[i] = d.value;
+				d3.select("#id" + d.key).transition().duration(500)
+						.attr("r", d.value == 1 ? 2*radiusScale(vHospitals[i].drg.dischargeNum) : 0)
+					.transition().delay(550).duration(500)
+						.attr("r", d.value == 1 ?   radiusScale(vHospitals[i].drg.dischargeNum) : 0);
 
-		// 	}
-		// })
+			}
+		})
 
 		// d3.select("#active").text(all.value());
 	}
@@ -188,17 +239,9 @@ function ready(error, topology, hospitals, drg){
 
 
 var printDetails = [
-					{'var': 'name', 'print': 'Name'},
-					{'var': 'type_of_meteorite', 'print': 'Type'},
-					{'var': 'mass_g', 'print': 'Mass(g)'},
-					{'var': 'year', 'print': 'Year'}];
+					{'var': 'name', 'print': 'Name'}];
 
 function updateDetails(metor){
-	var image = new Image();
-	image.onload = function(){
-		document.getElementById("tooltipImg").src = 'pictures/' + metor.cartodb_id + '.jpg';}
-	image.src = 'pictures/' + metor.cartodb_id + '.jpg';
-
 	tooltip.selectAll("div").remove();
 	tooltip.selectAll("div").data(printDetails).enter()
 		.append("div")
