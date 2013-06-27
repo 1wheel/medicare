@@ -1,6 +1,7 @@
 var width = 1000,
 	height = 500,
 	centered;
+	zoomRender = false;
 
 var proj = d3.geo.albersUsa()
 		.scale(1300)
@@ -58,6 +59,7 @@ function clicked(d) {
   g.selectAll("path")
     .classed("active", centered && function(d) { return d === centered; });
 
+  zoomRender = true;
 }
 
 
@@ -88,7 +90,6 @@ function ready(error, topology, hospitals, drg){
 		.attr("class", "border")
 		.on("click", function(d){ 
 			var abv = stateNameToAbv[d.properties.name];
-			console.log(abv); 
 			clicked(d3.select(this).datum());
 			state.filter( (centered != null) ? abv : null );
 			setTimeout(renderAll, 500); 
@@ -116,16 +117,16 @@ function ready(error, topology, hospitals, drg){
 
 	colorScale.range(["#FFFF66", "#FFFF00", "#E68000", "#D94000", "#CC0000"])
 				.domain(hospitals.map( function(d){ return d.drg ? d.drg.avPayments : undefined; } ));
-	colorScale.range(['lightblue', 'blue', 'orange', 'red']);
+	colorScale.range(['#add8e6', '#c2a2ad', 'purple', '#eb363a', '#ff0000']);
 
 	circles = g.selectAll("circle")
 		.data(hospitals).enter()
 			.append("circle")
 				.attr("cx", function(d){ return proj([d.long, d.lat])[0]; })
 				.attr("cy", function(d){ return proj([d.long, d.lat])[1]; })
-				.attr("r", 	function(d){ return d.drg ? radiusScale(d.drg.dischargeNum) : 0; })
+				.attr("r", 	function(d){ return d.drg ? radiusScale(d.drg.dischargeNum) : .2; })
 				.attr("id", function(d){ return "id" + d.hosID; })
-				.style("fill", function(d){ return d.drg ? colorScale(d.drg.avPayments) : 0; })
+				.style("fill", function(d){ return d.drg ? colorScale(d.drg.avPayments) : 3; })
 		.on("mouseover", function(d){
 			d3.select(this)
 				.attr("stroke", "black")
@@ -139,6 +140,9 @@ function ready(error, topology, hospitals, drg){
 			    .style("opacity", 1)
 			    .style("display", "block")
 
+			console.log(d.drg.dischargeNum);
+			console.log(d.hosID);
+
 			updateDetails(d);
 			})
 		.on("mouseout", function(d){
@@ -150,6 +154,8 @@ function ready(error, topology, hospitals, drg){
 		});
 
 	vHospitals = hospitals.filter(function(d){ return d.drg; });
+	vHospitalIDmap = vHospitals.map(function(d){ return d.hosID; });
+	vCircles = circles.filter(function(d){ return d.drg; });
 	hospitalCF = crossfilter(vHospitals);
 	all = hospitalCF.groupAll();
 
@@ -206,27 +212,26 @@ function ready(error, topology, hospitals, drg){
 	}
 
 
-	lastFilterArray = [];
-	vHospitals.forEach(function(d, i){
-		lastFilterArray[i] = 1;
-	});
+	oldFilterObject = {};
+	hosIDs.all().forEach(function(d){ oldFilterObject[d.key] = d.value; });
 
 	function renderAll(){
 		chart.each(render);
+		zoomRender = false;
 
-		var filterArray = hosIDs.all();
-		filterArray.forEach(function(d, i){
-			if (d.value != lastFilterArray[i]){
-				lastFilterArray[i] = d.value;
-				d3.select("#id" + d.key).transition().duration(500)
-						.attr("r", d.value == 1 ? 2*radiusScale(vHospitals[i].drg.dischargeNum) : 0)
-					.transition().delay(550).duration(500)
-						.attr("r", d.value == 1 ?   radiusScale(vHospitals[i].drg.dischargeNum) : 0);
+		newFilterObject = {};
+		hosIDs.all().forEach(function(d){ newFilterObject[d.key] = d.value; });
 
-			}
-		})
+		vCircles.filter(function(d){ return oldFilterObject[d.hosID] != newFilterObject[d.hosID]; })
+				.transition().duration(500)
+					.attr("r", function(d){ return 2*radiusScale(d.drg.dischargeNum)*newFilterObject[d.hosID] })
+				.transition().delay(550).duration(500)
+					.attr("r", function(d){ return   radiusScale(d.drg.dischargeNum)*newFilterObject[d.hosID] });
+
+		oldFilterObject = newFilterObject;
 
 		// d3.select("#active").text(all.value());
+
 	}
 
 	window.reset = function(i){

@@ -140,7 +140,7 @@ div.tooltip {
 
 .bar{
   stroke:black;
-  stroke-width: .3; 
+  stroke-width: 0; 
 }
 
 .axis path, .axis line {

@@ -82,7 +82,7 @@ function barChart() {
         }
       }
 
-      g.selectAll(".bar").attr("d", barPath);
+      g.selectAll(".bar").transition().duration(zoomRender ? 500 : 0).attr("d", barPath);
     });
 
     function barPath(groups) {
@@ -149,13 +149,7 @@ function barChart() {
   chart.x = function(_) {
     if (!arguments.length) return x;
     x = _;
-    if (x.domain()[1] < 3000){
-      //format years differently than mass
-      axis.scale(x).ticks(10).tickFormat(d3.format(""));
-    }
-    else{
-      axis.scale(x).tickValues([1, 10, 100, 1000, 10000, 100000, 1000000, 10000000]).tickFormat(d3.format(","));
-    }
+    axis.scale(x).ticks(5).tickFormat(d3.format(","));
     brush.x(x);
     return chart;
   };
