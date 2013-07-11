@@ -79,9 +79,9 @@ queue()
 	.defer(d3.json, "us-states.json")
 	.defer(d3.csv, "simpleHOS.csv")
 	.defer(d3.csv, "drg/057.csv")
-	.await(ready);
+	.await(intialLoad);
 
-function ready(error, topology, hospitals, drg){
+function intialLoad(error, topology, hospitals, drg){
 	stateBorders = g.selectAll("path")
 		.data(topology.features)
 	.enter()
