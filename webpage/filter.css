@@ -40,6 +40,15 @@ h1, h2 {
   text-rendering: optimizeLegibility;
 }
 
+form{
+  display: inline-block;
+}
+
+#formDiv{
+  display: inline-block;
+  width: 200px;
+}
+
 #body > p {
   line-height: 1.5em;
   width: 640px;
